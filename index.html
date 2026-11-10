@@ -50,7 +50,10 @@
   .info{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px 24px;padding:18px 22px;margin-bottom:16px}
   .info dt{color:var(--t3);font-size:12px} .info dd{margin:2px 0 0}
   .grp{margin-bottom:14px;padding:16px 20px}
+  h2.cat{font-size:20px;font-weight:500;margin:28px 0 12px}
+  .tree .cath{padding:10px 8px 4px;font-size:12px;color:var(--t3)}
   .grp-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .grp-head button{white-space:nowrap;flex:none}
   .grp-head .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px}
   .eqs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:12px}
   .eq{display:block;text-align:left;border:1px solid var(--hair);border-radius:10px;padding:10px 12px;background:#fff}
@@ -180,6 +183,7 @@ function indexSchema() {
   nodes = {};
   schema.tree.forEach(g => { nodes[g.id] = { ...g, group: g, parent: null }; (g.children || []).forEach(c => { nodes[c.id] = { ...c, group: g, parent: g }; }); });
 }
+const catOf = g => (g && g.category) || 'อุปกรณ์ไฟฟ้ากำลัง';
 const typeName = n => n ? (n.nameTh ? n.nameTh + ' (' + n.name + ')' : n.name) : '-';
 const liveFields = n => (n && n.fields || []).filter(f => f.status !== 'remove');
 function completeness(e) {
@@ -271,11 +275,13 @@ function render() {
       <div><dt>จำนวนอุปกรณ์</dt><dd>${cur.eq.length.toLocaleString()} รายการ (หลัก ${tops.length})</dd></div>
       <div><dt>หมายเหตุ</dt><dd>${esc(st.note || '-')}</dd></div>
     </dl>
-    ${schema.tree.map(g => {
-      const list = tops.filter(e => e.typeId === g.id);
+    ${schema.tree.map((g, i) => {
+      const list = tops.filter(e => e.typeId === g.id), cat = catOf(g), head = (i === 0 || catOf(schema.tree[i - 1]) !== cat) ? `<h2 class="cat">${esc(cat)} <span class="muted">· ${tops.filter(e => nodes[e.typeId] && catOf(nodes[e.typeId].group) === cat).length} รายการ</span></h2>` : '';
+      return head + (() => {
       return `<section class="card grp"><div class="grp-head"><h2><span class="sw" style="background:${esc(g.color || '#999')}"></span>${esc(typeName(g))} <span class="muted">· ${list.length}</span></h2>
         ${can.edit() ? `<button data-add="${esc(g.id)}">+ เพิ่ม</button>` : ''}</div>
         ${list.length ? `<div class="eqs">${list.map(eqCard).join('')}</div>` : ''}</section>`;
+      })();
     }).join('')}`;
   const on = (i, f) => { const b = $(i); if (b) b.onclick = f; };
   on('editStBtn', () => editStation(st)); on('xlsxBtn', exportStation);
@@ -345,8 +351,9 @@ function renderSchema() {
   $('main').innerHTML = `
     <h1>โครงสร้างฟิลด์ <span>${Object.keys(nodes).length} ชนิดอุปกรณ์</span></h1>
     <p class="lede">เพิ่มหรือแก้ไขฟิลด์ของแต่ละชนิดอุปกรณ์ ใช้กับทุกสถานี ฟิลด์ที่ "เสนอตัด" จะซ่อนจากแบบฟอร์ม แต่ข้อมูลเดิมยังเก็บไว้</p>
+    <div id="mergeBox"></div>
     <div style="display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px">
-      <div class="card tree" style="padding:10px">${schema.tree.map(g => `<button data-t="${g.id}" class="${g.id === sel.id ? 'on' : ''}">${esc(g.name)}</button>${(g.children || []).map(c => `<button data-t="${c.id}" class="child${c.id === sel.id ? ' on' : ''}">${esc(c.name)}</button>`).join('')}`).join('')}
+      <div class="card tree" style="padding:10px">${schema.tree.map((g, i) => `${i === 0 || catOf(schema.tree[i - 1]) !== catOf(g) ? `<div class="cath">${esc(catOf(g))}</div>` : ''}<button data-t="${g.id}" class="${g.id === sel.id ? 'on' : ''}">${esc(g.name)}</button>${(g.children || []).map(c => `<button data-t="${c.id}" class="child${c.id === sel.id ? ' on' : ''}">${esc(c.name)}</button>`).join('')}`).join('')}
         <div style="padding:8px"><button id="addTypeBtn">+ เพิ่มชนิดอุปกรณ์</button></div></div>
       <div class="card" style="padding:16px 18px;min-width:0">
         <div class="row" style="justify-content:space-between;margin-bottom:10px"><h2>${esc(typeName(sel))} <span class="muted">· ${(sel.fields || []).length} ฟิลด์</span></h2><button class="primary" id="addFieldBtn">+ เพิ่มฟิลด์</button></div>
@@ -357,6 +364,19 @@ function renderSchema() {
   $('main').querySelectorAll('[data-ef]').forEach(b => b.onclick = () => editField(sel, sel.fields.find(f => f.id === b.dataset.ef)));
   $('addFieldBtn').onclick = () => editField(sel, null);
   $('addTypeBtn').onclick = addType;
+  offerNewGroups();
+}
+// groups added to the standard after this system was set up (e.g. ระบบป้องกันและควบคุม) can be merged in without touching existing data
+async function offerNewGroups() {
+  let seed; try { seed = await (await fetch('schema-seed.json', { cache: 'no-store' })).json(); } catch (e) { return; }
+  const have = new Set(schema.tree.map(g => g.id)), add = seed.tree.filter(g => !have.has(g.id));
+  if (!add.length || !$('mergeBox')) return;
+  const cats = [...new Set(add.map(catOf))].join(', ');
+  $('mergeBox').innerHTML = `<div class="card" style="padding:14px 18px;margin-bottom:14px;border-left:4px solid var(--accent)"><b>มีกลุ่มอุปกรณ์ใหม่ในมาตรฐาน ${add.length} กลุ่ม</b> (${esc(cats)}) <button class="primary" id="mergeBtn" style="margin-left:10px">เพิ่มเข้าระบบ</button><div class="muted" style="font-size:13px;margin-top:4px">${add.map(g => esc(g.nameTh || g.name)).join(', ')}</div></div>`;
+  $('mergeBtn').onclick = async () => {
+    schema.tree = schema.tree.concat(add); schema.updatedAt = new Date().toISOString(); schema.updatedBy = me.email;
+    await store.saveSchema(schema); log('เพิ่มกลุ่มจากมาตรฐาน', add.map(g => g.name).join(', ')); indexSchema(); toast('เพิ่ม ' + add.length + ' กลุ่มแล้ว'); renderSchema();
+  };
 }
 function realNode(id) { for (const g of schema.tree) { if (g.id === id) return g; for (const c of g.children || []) if (c.id === id) return c; } return null; }
 async function editField(sel, f) {
@@ -381,10 +401,11 @@ async function editField(sel, f) {
 async function addType() {
   const v = await ask('เพิ่มชนิดอุปกรณ์', [
     { label: 'อยู่ภายใต้', type: 'select', value: '', options: [['', '— เป็นอุปกรณ์หลัก (กลุ่มใหม่) —']].concat(schema.tree.map(g => [g.id, g.name])) },
-    { label: 'ชื่อ (อังกฤษ)', required: true }, { label: 'ชื่อภาษาไทย' }]);
+    { label: 'ชื่อ (อังกฤษ)', required: true }, { label: 'ชื่อภาษาไทย' },
+    { label: 'หมวด (เฉพาะอุปกรณ์หลัก)', type: 'select', value: 'อุปกรณ์ไฟฟ้ากำลัง', options: [...new Set(schema.tree.map(catOf))].map(c => [c, c]) }]);
   if (!v) return;
   const n = { id: uid('n'), name: v[1], nameTh: v[2], sheet: v[1], desc: '', fields: [], children: [] };
-  if (v[0]) { const g = realNode(v[0]); delete n.children; g.children = (g.children || []).concat(n); } else { n.color = '#6b7280'; schema.tree.push(n); }
+  if (v[0]) { const g = realNode(v[0]); delete n.children; g.children = (g.children || []).concat(n); } else { n.color = '#6b7280'; n.category = v[3] || 'อุปกรณ์ไฟฟ้ากำลัง'; schema.tree.push(n); }
   await store.saveSchema(schema); log('เพิ่มชนิดอุปกรณ์', n.name); indexSchema(); cur.typeId = n.id; renderSchema();
 }
 
