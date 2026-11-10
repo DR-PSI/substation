@@ -1,0 +1,469 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>ข้อมูลทรัพย์สินสถานีไฟฟ้า</title>
+<!-- enertric-ui: layout rules adapted from unslop by Damir Sokolovsky (@heydamir), CC BY 4.0 -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Thai:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#fafafa; --card:#fff; --raised:#f4f4f5; --hair:rgba(23,23,23,.08); --line:#d4d4d8;
+    --t1:#171717; --t2:#454545; --t3:#666; --accent:#2a64c8; --pos:#16a34a; --neg:#dc2626; --warn:#d97706;
+    --font:'IBM Plex Sans Thai','Noto Sans Thai','Leelawadee UI',system-ui,sans-serif; --mono:'IBM Plex Mono',ui-monospace,monospace;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--t1);font:400 14px/1.55 var(--font);font-variant-numeric:tabular-nums}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{background:var(--card);border:1px solid var(--hair);border-radius:8px;padding:7px 14px;cursor:pointer;transition:background-color .15s ease}
+  button:hover{background:var(--raised)} button:disabled{opacity:.5;cursor:default}
+  button.primary{background:var(--t1);color:#fff;border-color:var(--t1)} button.primary:hover{background:#333}
+  button.danger{color:var(--neg)} button.link{border:none;background:none;padding:4px 6px;color:var(--t2)} button.link:hover{color:var(--t1)}
+  input,select,textarea{width:100%;padding:8px 10px;border:1px solid var(--line);border-radius:8px;background:#fff}
+  input:focus,select:focus,textarea:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px rgba(42,100,200,.12)}
+  label{display:block;color:var(--t2);font-size:13px;margin-bottom:4px}
+  .muted{color:var(--t3)} .mono{font-family:var(--mono)} .req{color:var(--neg)}
+  .card{background:var(--card);border:1px solid var(--hair);border-radius:14px;box-shadow:0 1px 2px rgba(23,23,23,.04),0 4px 16px rgba(23,23,23,.04)}
+  /* login */
+  #login{min-height:100vh;display:grid;place-items:center;padding:24px}
+  #login .card{max-width:420px;width:100%;padding:32px}
+  #login h1{margin:0 0 6px;font-size:24px;font-weight:500}
+  /* shell */
+  .top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 24px;border-bottom:1px solid var(--hair);background:var(--card);position:sticky;top:0;z-index:5}
+  .crumb{display:flex;align-items:center;gap:8px;font-weight:500}
+  .crumb svg{width:16px;height:16px;stroke:var(--t3);fill:none;stroke-width:1.5}
+  .top .right{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+  .badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:999px;background:var(--raised);color:var(--t2)}
+  .badge.demo{background:#fff4e5;color:#8a4b0f}
+  .layout{display:grid;grid-template-columns:300px minmax(0,1fr);min-height:calc(100vh - 62px)}
+  aside{border-right:1px solid var(--hair);background:var(--card);padding:16px;display:flex;flex-direction:column;gap:10px}
+  aside .list{overflow:auto;flex:1;margin:0 -6px}
+  .st{display:block;width:100%;text-align:left;border:none;border-radius:8px;padding:9px 10px;background:none}
+  .st:hover{background:var(--raised)} .st.on{background:#eef3fc}
+  .st b{display:block;font-weight:500} .st span{font-size:12px;color:var(--t3)}
+  main{padding:24px 32px 48px;min-width:0}
+  h1{margin:0 0 4px;font-size:30px;font-weight:400;line-height:1.2} h1 span{color:#a3a3a3}
+  h2{margin:0;font-size:16px;font-weight:500}
+  .lede{margin:0 0 20px;color:var(--t3);font-size:13px}
+  .row{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+  .info{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px 24px;padding:18px 22px;margin-bottom:16px}
+  .info dt{color:var(--t3);font-size:12px} .info dd{margin:2px 0 0}
+  .grp{margin-bottom:14px;padding:16px 20px}
+  .grp-head{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .grp-head .sw{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:8px}
+  .eqs{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:12px}
+  .eq{display:block;text-align:left;border:1px solid var(--hair);border-radius:10px;padding:10px 12px;background:#fff}
+  .eq:hover{border-color:var(--accent)} .eq b{display:block;font-weight:500}
+  .bar{height:6px;border-radius:3px;background:var(--raised);margin-top:8px;overflow:hidden} .bar i{display:block;height:100%;background:var(--pos)}
+  .bar.low i{background:var(--warn)}
+  .form{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:14px 20px;padding:20px 22px}
+  .form .f small{display:block;color:var(--t3);font-size:12px;margin-top:2px}
+  .tag-proposed{font-size:11px;color:#8a4b0f;background:#fff4e5;border-radius:4px;padding:0 5px;margin-left:4px}
+  table{width:100%;border-collapse:collapse;font-size:13px}
+  th{text-align:left;font-weight:400;color:var(--t2);padding:8px 10px;border-bottom:1px solid var(--hair)}
+  td{padding:8px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
+  .tree{max-height:70vh;overflow:auto}
+  .tree button{display:block;width:100%;text-align:left;border:none;background:none;border-radius:6px;padding:5px 8px}
+  .tree button.on{background:#eef3fc} .tree .child{padding-left:22px;color:var(--t2)}
+  .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
+  .modal{background:#fff;border-radius:14px;width:100%;max-width:520px;max-height:90vh;overflow:auto;padding:22px 24px;box-shadow:0 12px 40px rgba(0,0,0,.2)}
+  .modal h3{margin:0 0 14px;font-size:18px;font-weight:500}
+  .modal .fields{display:grid;gap:12px} .modal .acts{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+  #toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--t1);color:#fff;padding:9px 16px;border-radius:8px;opacity:0;transition:opacity .2s;z-index:30;pointer-events:none}
+  #toast.show{opacity:1}
+  .empty{padding:40px;text-align:center;color:var(--t3)}
+  @media (max-width:900px){.layout{grid-template-columns:1fr} aside{border-right:none;border-bottom:1px solid var(--hair);max-height:40vh} main{padding:18px 16px}}
+</style>
+</head>
+<body>
+<div id="login" style="display:none">
+  <div class="card">
+    <h1 id="loginTitle">ข้อมูลทรัพย์สินสถานีไฟฟ้า</h1>
+    <p class="muted" style="margin:0 0 20px">เก็บข้อมูลอุปกรณ์ในสถานีไฟฟ้าตามมาตรฐานโครงสร้างข้อมูล เข้าใช้ได้เฉพาะผู้ที่ได้รับอนุญาต</p>
+    <button class="primary" id="loginBtn" style="width:100%;padding:11px">เข้าสู่ระบบด้วย Google</button>
+    <p id="loginMsg" class="muted" style="margin:14px 0 0;font-size:13px"></p>
+  </div>
+</div>
+
+<div id="app" style="display:none">
+  <div class="top">
+    <div class="crumb"><svg viewBox="0 0 16 16" aria-hidden="true"><rect x="2" y="2" width="5" height="5" rx="1"/><rect x="9" y="2" width="5" height="5" rx="1"/><rect x="2" y="9" width="5" height="5" rx="1"/><rect x="9" y="9" width="5" height="5" rx="1"/></svg><span id="appName">ข้อมูลทรัพย์สินสถานีไฟฟ้า</span> <span id="modeBadge"></span></div>
+    <div class="right">
+      <button class="link" id="navSchema" hidden>โครงสร้างฟิลด์</button>
+      <button class="link" id="navUsers" hidden>ผู้ใช้</button>
+      <span class="muted" id="whoami"></span>
+      <button id="logoutBtn">ออกจากระบบ</button>
+    </div>
+  </div>
+  <div class="layout">
+    <aside>
+      <div class="row" style="justify-content:space-between"><h2>สถานีไฟฟ้า</h2><button id="addStationBtn" hidden>+ เพิ่มสถานี</button></div>
+      <input type="search" id="stSearch" placeholder="ค้นหาชื่อหรือรหัสสถานี" aria-label="ค้นหาสถานี">
+      <div class="list" id="stList"></div>
+    </aside>
+    <main id="main"><div class="empty">กำลังโหลด…</div></main>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalBg"><div class="modal" id="modal"></div></div>
+<div id="toast"></div>
+
+<script src="config.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script type="module">
+const CFG = window.APP_CONFIG || {}, FB = CFG.firebase || {};
+const DEMO = !FB.apiKey;
+const OWNERS = (CFG.ownerEmails || []).map(e => e.toLowerCase());
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const uid = p => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const toast = m => { const t = $('toast'); t.textContent = m; t.classList.add('show'); clearTimeout(t._h); t._h = setTimeout(() => t.classList.remove('show'), 2200); };
+const ROLE_TH = { admin: 'ผู้ดูแล', editor: 'ผู้แก้ไข', viewer: 'ผู้ดูอย่างเดียว' };
+const STATUS_TH = { current: 'ใช้อยู่', add: 'เสนอเพิ่ม', review: 'รอพิจารณา', remove: 'เสนอตัด' };
+const TYPE_TH = { text: 'ข้อความ', number: 'ตัวเลข', date: 'วันที่', select: 'ตัวเลือก' };
+if (CFG.appName) { $('appName').textContent = CFG.appName; $('loginTitle').textContent = CFG.appName; document.title = CFG.appName; }
+
+// ================= storage: Firestore, or this browser in demo mode =================
+let store, me = { email: '', name: '', role: 'viewer' };
+function demoStore() {
+  const K = 'subdata-demo', load = () => JSON.parse(localStorage.getItem(K) || '{"config":{},"users":{},"stations":{},"eq":{},"log":[]}');
+  const save = d => localStorage.setItem(K, JSON.stringify(d));
+  return {
+    async getSchema() { return load().config.schema || null; },
+    async saveSchema(s) { const d = load(); d.config.schema = s; save(d); },
+    async listStations() { return Object.values(load().stations); },
+    async saveStation(st) { const d = load(); d.stations[st.id] = st; save(d); },
+    async deleteStation(id) { const d = load(); delete d.stations[id]; delete d.eq[id]; save(d); },
+    async listEquipment(sid) { return Object.values((load().eq[sid]) || {}); },
+    async saveEquipment(sid, e) { const d = load(); (d.eq[sid] = d.eq[sid] || {})[e.id] = e; save(d); },
+    async deleteEquipment(sid, id) { const d = load(); if (d.eq[sid]) delete d.eq[sid][id]; save(d); },
+    async listUsers() { return Object.entries(load().users).map(([email, u]) => ({ email, ...u })); },
+    async saveUser(email, u) { const d = load(); d.users[email] = u; save(d); },
+    async deleteUser(email) { const d = load(); delete d.users[email]; save(d); },
+    async getUser(email) { return load().users[email] || null; },
+    async addLog(x) { const d = load(); d.log.unshift(x); d.log = d.log.slice(0, 500); save(d); }
+  };
+}
+async function firestoreStore() {
+  const V = '10.12.2', base = `https://www.gstatic.com/firebasejs/${V}/`;
+  const [{ initializeApp }, A, F] = await Promise.all([import(base + 'firebase-app.js'), import(base + 'firebase-auth.js'), import(base + 'firebase-firestore.js')]);
+  const app = initializeApp(FB), auth = A.getAuth(app), db = F.getFirestore(app);
+  const all = async q => (await F.getDocs(q)).docs.map(d => ({ id: d.id, ...d.data() }));
+  return {
+    auth, A,
+    async getSchema() { const s = await F.getDoc(F.doc(db, 'config', 'schema')); return s.exists() ? s.data() : null; },
+    async saveSchema(s) { await F.setDoc(F.doc(db, 'config', 'schema'), s); },
+    async listStations() { return all(F.collection(db, 'stations')); },
+    async saveStation(st) { const { id, ...rest } = st; await F.setDoc(F.doc(db, 'stations', id), rest); },
+    async deleteStation(id) {
+      const eqs = await all(F.collection(db, 'stations', id, 'equipment'));
+      await Promise.all(eqs.map(e => F.deleteDoc(F.doc(db, 'stations', id, 'equipment', e.id))));
+      await F.deleteDoc(F.doc(db, 'stations', id));
+    },
+    async listEquipment(sid) { return all(F.collection(db, 'stations', sid, 'equipment')); },
+    async saveEquipment(sid, e) { const { id, ...rest } = e; await F.setDoc(F.doc(db, 'stations', sid, 'equipment', id), rest); },
+    async deleteEquipment(sid, id) { await F.deleteDoc(F.doc(db, 'stations', sid, 'equipment', id)); },
+    async listUsers() { return (await all(F.collection(db, 'users'))).map(u => ({ email: u.id, ...u })); },
+    async saveUser(email, u) { await F.setDoc(F.doc(db, 'users', email), u); },
+    async deleteUser(email) { await F.deleteDoc(F.doc(db, 'users', email)); },
+    async getUser(email) { const s = await F.getDoc(F.doc(db, 'users', email)); return s.exists() ? s.data() : null; },
+    async addLog(x) { try { await F.addDoc(F.collection(db, 'log'), x); } catch (e) { console.warn('log', e); } }
+  };
+}
+const can = { edit: () => me.role === 'admin' || me.role === 'editor', admin: () => me.role === 'admin' };
+const log = (action, target) => store.addLog({ t: new Date().toISOString(), user: me.email, action, target });
+
+// ================= state =================
+let schema = null, nodes = {}, stations = [], cur = { station: null, eq: [], view: 'station', eqId: null, typeId: null };
+function indexSchema() {
+  nodes = {};
+  schema.tree.forEach(g => { nodes[g.id] = { ...g, group: g, parent: null }; (g.children || []).forEach(c => { nodes[c.id] = { ...c, group: g, parent: g }; }); });
+}
+const typeName = n => n ? (n.nameTh ? n.nameTh + ' (' + n.name + ')' : n.name) : '-';
+const liveFields = n => (n && n.fields || []).filter(f => f.status !== 'remove');
+function completeness(e) {
+  const req = liveFields(nodes[e.typeId]).filter(f => f.required);
+  if (!req.length) return null;
+  const done = req.filter(f => String((e.values || {})[f.id] ?? '').trim() !== '').length;
+  return Math.round(100 * done / req.length);
+}
+const eqLabel = e => e.tag || (e.values && (Object.values(e.values).find(v => v) || '')) || '(ยังไม่ตั้งชื่อ)';
+
+// ================= modal form =================
+function ask(title, fields, okText) {
+  return new Promise(res => {
+    const m = $('modal');
+    m.innerHTML = `<h3>${esc(title)}</h3><div class="fields">${fields.map((f, i) => `<div><label for="mf${i}">${esc(f.label)}${f.required ? ' <span class="req">*</span>' : ''}</label>${
+      f.type === 'select' ? `<select id="mf${i}">${f.options.map(o => `<option value="${esc(o[0])}"${o[0] === f.value ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`
+      : f.type === 'textarea' ? `<textarea id="mf${i}" rows="3">${esc(f.value || '')}</textarea>`
+      : f.type === 'checkbox' ? `<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="mf${i}" style="width:auto"${f.value ? ' checked' : ''}>${esc(f.hint || '')}</label>`
+      : `<input id="mf${i}" type="${f.type || 'text'}" value="${esc(f.value || '')}" placeholder="${esc(f.placeholder || '')}">`}</div>`).join('')}</div>
+      <div class="acts"><button id="mCancel">ยกเลิก</button><button class="primary" id="mOk">${esc(okText || 'บันทึก')}</button></div>`;
+    $('modalBg').style.display = 'flex';
+    const close = v => { $('modalBg').style.display = 'none'; res(v); };
+    $('mCancel').onclick = () => close(null);
+    $('mOk').onclick = () => {
+      const vals = fields.map((f, i) => f.type === 'checkbox' ? $('mf' + i).checked : $('mf' + i).value.trim());
+      const miss = fields.findIndex((f, i) => f.required && !vals[i]);
+      if (miss >= 0) { $('mf' + miss).focus(); toast('กรอก ' + fields[miss].label); return; }
+      close(vals);
+    };
+    setTimeout(() => { const f = $('mf0'); if (f) f.focus(); }, 50);
+  });
+}
+const confirmBox = async (msg, ok) => !!(await ask(msg, [], ok || 'ยืนยัน'));
+
+// ================= stations =================
+async function loadStations() { stations = (await store.listStations()).sort((a, b) => String(a.name).localeCompare(String(b.name), 'th')); renderStations(); }
+function renderStations() {
+  const q = $('stSearch').value.trim().toLowerCase();
+  const list = stations.filter(s => !q || (s.name + ' ' + (s.code || '') + ' ' + (s.district || '')).toLowerCase().includes(q));
+  $('stList').innerHTML = list.length ? list.map(s => `<button class="st${cur.station && cur.station.id === s.id ? ' on' : ''}" data-st="${esc(s.id)}"><b>${esc(s.name)}</b><span>${esc([s.code, s.district].filter(Boolean).join(' · '))}</span></button>`).join('')
+    : `<div class="empty" style="padding:20px">${stations.length ? 'ไม่พบสถานี' : 'ยังไม่มีสถานี'}</div>`;
+}
+$('stSearch').addEventListener('input', renderStations);
+$('stList').addEventListener('click', e => { const b = e.target.closest('[data-st]'); if (b) openStation(b.dataset.st); });
+async function editStation(st) {
+  const v = await ask(st ? 'แก้ไขข้อมูลสถานี' : 'เพิ่มสถานีไฟฟ้า', [
+    { label: 'ชื่อสถานี', value: st && st.name, required: true, placeholder: 'เช่น สถานีย่อยบางมด' },
+    { label: 'รหัสสถานี', value: st && st.code, placeholder: 'เช่น BM' },
+    { label: 'หน่วยงาน / เขต', value: st && st.district, placeholder: 'เช่น ฝบร. หรือ ฟขธ.' },
+    { label: 'ระดับแรงดัน', value: st && st.voltage, placeholder: 'เช่น 69/24 kV' },
+    { label: 'ที่ตั้ง', value: st && st.address },
+    { label: 'ละติจูด', value: st && st.lat, type: 'number' }, { label: 'ลองจิจูด', value: st && st.lon, type: 'number' },
+    { label: 'หมายเหตุ', value: st && st.note, type: 'textarea' }]);
+  if (!v) return;
+  const s = Object.assign(st || { id: uid('st'), createdAt: new Date().toISOString(), createdBy: me.email },
+    { name: v[0], code: v[1], district: v[2], voltage: v[3], address: v[4], lat: v[5], lon: v[6], note: v[7], updatedAt: new Date().toISOString(), updatedBy: me.email });
+  await store.saveStation(s); log(st ? 'แก้ไขสถานี' : 'เพิ่มสถานี', s.name); toast('บันทึกแล้ว');
+  await loadStations(); openStation(s.id);
+}
+$('addStationBtn').addEventListener('click', () => editStation(null));
+
+async function openStation(id) {
+  cur.station = stations.find(s => s.id === id); cur.view = 'station'; cur.eqId = null;
+  renderStations();
+  $('main').innerHTML = '<div class="empty">กำลังโหลดอุปกรณ์…</div>';
+  cur.eq = await store.listEquipment(id);
+  render();
+}
+
+// ================= main views =================
+function render() {
+  if (cur.view === 'schema') return renderSchema();
+  if (cur.view === 'users') return renderUsers();
+  const st = cur.station;
+  if (!st) { $('main').innerHTML = `<div class="empty">${stations.length ? 'เลือกสถานีจากรายการด้านซ้าย' : (can.edit() ? 'เริ่มต้นโดยกด "+ เพิ่มสถานี"' : 'ยังไม่มีสถานีในระบบ')}</div>`; return; }
+  if (cur.view === 'eq') return renderEquipment();
+  const tops = cur.eq.filter(e => !e.parentId);
+  $('main').innerHTML = `
+    <h1>${esc(st.name)} <span>${esc(st.code || '')}</span></h1>
+    <p class="lede">${esc([st.district, st.voltage].filter(Boolean).join(' · '))}${st.updatedAt ? ' · แก้ไขล่าสุด ' + new Date(st.updatedAt).toLocaleString('th-TH') + ' โดย ' + esc(st.updatedBy || '') : ''}</p>
+    <div class="row" style="margin-bottom:14px">
+      ${can.edit() ? '<button id="editStBtn">แก้ไขข้อมูลสถานี</button>' : ''}
+      <button id="xlsxBtn">ส่งออก Excel</button>
+      ${can.admin() ? '<button class="danger" id="delStBtn">ลบสถานี</button>' : ''}
+    </div>
+    <dl class="card info">
+      <div><dt>ที่ตั้ง</dt><dd>${esc(st.address || '-')}</dd></div>
+      <div><dt>พิกัด</dt><dd class="mono">${st.lat && st.lon ? esc(st.lat + ', ' + st.lon) : '-'}</dd></div>
+      <div><dt>จำนวนอุปกรณ์</dt><dd>${cur.eq.length.toLocaleString()} รายการ (หลัก ${tops.length})</dd></div>
+      <div><dt>หมายเหตุ</dt><dd>${esc(st.note || '-')}</dd></div>
+    </dl>
+    ${schema.tree.map(g => {
+      const list = tops.filter(e => e.typeId === g.id);
+      return `<section class="card grp"><div class="grp-head"><h2><span class="sw" style="background:${esc(g.color || '#999')}"></span>${esc(typeName(g))} <span class="muted">· ${list.length}</span></h2>
+        ${can.edit() ? `<button data-add="${esc(g.id)}">+ เพิ่ม</button>` : ''}</div>
+        ${list.length ? `<div class="eqs">${list.map(eqCard).join('')}</div>` : ''}</section>`;
+    }).join('')}`;
+  const on = (i, f) => { const b = $(i); if (b) b.onclick = f; };
+  on('editStBtn', () => editStation(st)); on('xlsxBtn', exportStation);
+  on('delStBtn', async () => { if (await confirmBox('ลบสถานี "' + st.name + '" และอุปกรณ์ทั้งหมด?', 'ลบ')) { await store.deleteStation(st.id); log('ลบสถานี', st.name); cur.station = null; await loadStations(); render(); } });
+  $('main').querySelectorAll('[data-add]').forEach(b => b.onclick = () => addEquipment(b.dataset.add, null));
+  $('main').querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { cur.view = 'eq'; cur.eqId = b.dataset.eq; render(); });
+}
+function eqCard(e) {
+  const p = completeness(e), kids = cur.eq.filter(x => x.parentId === e.id).length;
+  return `<button class="eq" data-eq="${esc(e.id)}"><b>${esc(eqLabel(e))}</b><span class="muted" style="font-size:12px">${esc(nodes[e.typeId] ? nodes[e.typeId].name : '')}${kids ? ' · ส่วนประกอบ ' + kids : ''}</span>
+    ${p === null ? '' : `<div class="bar${p < 80 ? ' low' : ''}" title="กรอกฟิลด์ที่จำเป็นแล้ว ${p}%"><i style="width:${p}%"></i></div><span class="muted" style="font-size:12px">ฟิลด์จำเป็น ${p}%</span>`}</button>`;
+}
+async function addEquipment(typeId, parentId) {
+  const n = nodes[typeId];
+  const v = await ask('เพิ่ม ' + typeName(n), [{ label: 'ชื่อเรียก / Tag', required: true, placeholder: 'เช่น TR.1, BM-6912, H1' }]);
+  if (!v) return;
+  const e = { id: uid('eq'), typeId, parentId: parentId || null, tag: v[0], values: {}, createdAt: new Date().toISOString(), createdBy: me.email, updatedAt: new Date().toISOString(), updatedBy: me.email };
+  await store.saveEquipment(cur.station.id, e); cur.eq.push(e); log('เพิ่มอุปกรณ์', cur.station.name + ' › ' + e.tag);
+  cur.view = 'eq'; cur.eqId = e.id; render();
+}
+function inputFor(f, v, ro) {
+  const id = 'v_' + f.id, dis = ro ? ' disabled' : '';
+  if (f.type === 'number') return `<input id="${id}" type="number" step="any" value="${esc(v ?? '')}"${dis}>`;
+  if (f.type === 'date') return `<input id="${id}" type="date" value="${esc(v ?? '')}"${dis}>`;
+  if (f.type === 'select') return `<select id="${id}"${dis}><option value=""></option>${(f.options || []).map(o => `<option${o === v ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
+  return `<input id="${id}" type="text" value="${esc(v ?? '')}"${dis}>`;
+}
+function renderEquipment() {
+  const e = cur.eq.find(x => x.id === cur.eqId); if (!e) { cur.view = 'station'; return render(); }
+  const n = nodes[e.typeId], ro = !can.edit(), fields = liveFields(n), parent = e.parentId && cur.eq.find(x => x.id === e.parentId);
+  const kidsTypes = (n && n.children && n.children.length) ? n.children : [];
+  const p = completeness(e);
+  $('main').innerHTML = `
+    <p class="lede" style="margin-bottom:6px"><button class="link" id="backSt">‹ ${esc(cur.station.name)}</button>${parent ? ` › <button class="link" id="backParent">${esc(eqLabel(parent))}</button>` : ''}</p>
+    <h1>${esc(eqLabel(e))} <span>${esc(n ? n.name : '')}</span></h1>
+    <p class="lede">${esc(n && n.nameTh || '')}${p === null ? '' : ' · กรอกฟิลด์จำเป็นแล้ว ' + p + '%'}${e.updatedAt ? ' · แก้ไขล่าสุด ' + new Date(e.updatedAt).toLocaleString('th-TH') + ' โดย ' + esc(e.updatedBy || '') : ''}</p>
+    <div class="row" style="margin-bottom:14px">${ro ? '' : '<button class="primary" id="saveEq">บันทึก</button><button id="renEq">เปลี่ยนชื่อเรียก</button><button class="danger" id="delEq">ลบ</button>'}</div>
+    <div class="card form">${fields.map(f => `<div class="f"><label for="v_${esc(f.id)}">${esc(f.label || f.name)}${f.unit ? ' (' + esc(f.unit) + ')' : ''}${f.required ? ' <span class="req">*</span>' : ''}${f.status === 'add' ? '<span class="tag-proposed">เสนอเพิ่ม</span>' : ''}</label>${inputFor(f, (e.values || {})[f.id], ro)}${f.label && f.label !== f.name ? `<small>${esc(f.name)}</small>` : ''}</div>`).join('') || '<div class="muted">ชนิดนี้ยังไม่มีฟิลด์</div>'}</div>
+    ${kidsTypes.length ? `<h2 style="margin:24px 0 10px">ส่วนประกอบ</h2>${kidsTypes.map(k => {
+      const list = cur.eq.filter(x => x.parentId === e.id && x.typeId === k.id);
+      return `<section class="card grp"><div class="grp-head"><h2>${esc(typeName(k))} <span class="muted">· ${list.length}</span></h2>${ro ? '' : `<button data-addk="${esc(k.id)}">+ เพิ่ม</button>`}</div>${list.length ? `<div class="eqs">${list.map(eqCard).join('')}</div>` : ''}</section>`;
+    }).join('')}` : ''}`;
+  $('backSt').onclick = () => { cur.view = 'station'; render(); };
+  if ($('backParent')) $('backParent').onclick = () => { cur.eqId = parent.id; render(); };
+  $('main').querySelectorAll('[data-addk]').forEach(b => b.onclick = () => addEquipment(b.dataset.addk, e.id));
+  $('main').querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { cur.eqId = b.dataset.eq; render(); });
+  if (ro) return;
+  $('saveEq').onclick = async () => {
+    const vals = {}; fields.forEach(f => { const el = $('v_' + f.id); if (el && el.value !== '') vals[f.id] = f.type === 'number' ? Number(el.value) : el.value; });
+    Object.entries(e.values || {}).forEach(([k, v]) => { if (!fields.some(f => f.id === k)) vals[k] = v; });   // keep values of retired fields
+    e.values = vals; e.updatedAt = new Date().toISOString(); e.updatedBy = me.email;
+    await store.saveEquipment(cur.station.id, e); log('แก้ไขอุปกรณ์', cur.station.name + ' › ' + eqLabel(e)); toast('บันทึกแล้ว'); render();
+  };
+  $('renEq').onclick = async () => { const v = await ask('เปลี่ยนชื่อเรียก', [{ label: 'ชื่อเรียก / Tag', value: e.tag, required: true }]); if (v) { e.tag = v[0]; await store.saveEquipment(cur.station.id, e); render(); } };
+  $('delEq').onclick = async () => {
+    const kids = cur.eq.filter(x => x.parentId === e.id);
+    if (!(await confirmBox('ลบ "' + eqLabel(e) + '"' + (kids.length ? ' และส่วนประกอบ ' + kids.length + ' รายการ' : '') + '?', 'ลบ'))) return;
+    for (const k of kids) await store.deleteEquipment(cur.station.id, k.id);
+    await store.deleteEquipment(cur.station.id, e.id); log('ลบอุปกรณ์', cur.station.name + ' › ' + eqLabel(e));
+    cur.eq = cur.eq.filter(x => x.id !== e.id && x.parentId !== e.id); cur.view = parent ? 'eq' : 'station'; cur.eqId = parent ? parent.id : null; render();
+  };
+}
+
+// ================= schema editor (admin) =================
+function renderSchema() {
+  const sel = nodes[cur.typeId] || nodes[schema.tree[0].id]; cur.typeId = sel.id;
+  $('main').innerHTML = `
+    <h1>โครงสร้างฟิลด์ <span>${Object.keys(nodes).length} ชนิดอุปกรณ์</span></h1>
+    <p class="lede">เพิ่มหรือแก้ไขฟิลด์ของแต่ละชนิดอุปกรณ์ ใช้กับทุกสถานี ฟิลด์ที่ "เสนอตัด" จะซ่อนจากแบบฟอร์ม แต่ข้อมูลเดิมยังเก็บไว้</p>
+    <div style="display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px">
+      <div class="card tree" style="padding:10px">${schema.tree.map(g => `<button data-t="${g.id}" class="${g.id === sel.id ? 'on' : ''}">${esc(g.name)}</button>${(g.children || []).map(c => `<button data-t="${c.id}" class="child${c.id === sel.id ? ' on' : ''}">${esc(c.name)}</button>`).join('')}`).join('')}
+        <div style="padding:8px"><button id="addTypeBtn">+ เพิ่มชนิดอุปกรณ์</button></div></div>
+      <div class="card" style="padding:16px 18px;min-width:0">
+        <div class="row" style="justify-content:space-between;margin-bottom:10px"><h2>${esc(typeName(sel))} <span class="muted">· ${(sel.fields || []).length} ฟิลด์</span></h2><button class="primary" id="addFieldBtn">+ เพิ่มฟิลด์</button></div>
+        <div style="overflow:auto"><table><thead><tr><th>ฟิลด์</th><th>ชนิด</th><th>หน่วย</th><th>จำเป็น</th><th>สถานะ</th><th>Maximo</th><th></th></tr></thead><tbody>
+        ${(sel.fields || []).map(f => `<tr${f.status === 'remove' ? ' style="opacity:.5"' : ''}><td>${esc(f.name)}${f.label && f.label !== f.name ? `<div class="muted" style="font-size:12px">${esc(f.label)}</div>` : ''}</td><td>${TYPE_TH[f.type] || esc(f.type)}</td><td>${esc(f.unit || '')}</td><td>${f.required ? 'ใช่' : ''}</td><td>${STATUS_TH[f.status] || ''}</td><td class="mono" style="font-size:12px">${esc(f.maximo || '')}</td><td><button class="link" data-ef="${esc(f.id)}">แก้ไข</button></td></tr>`).join('')}
+        </tbody></table></div></div></div>`;
+  $('main').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { cur.typeId = b.dataset.t; renderSchema(); });
+  $('main').querySelectorAll('[data-ef]').forEach(b => b.onclick = () => editField(sel, sel.fields.find(f => f.id === b.dataset.ef)));
+  $('addFieldBtn').onclick = () => editField(sel, null);
+  $('addTypeBtn').onclick = addType;
+}
+function realNode(id) { for (const g of schema.tree) { if (g.id === id) return g; for (const c of g.children || []) if (c.id === id) return c; } return null; }
+async function editField(sel, f) {
+  const v = await ask(f ? 'แก้ไขฟิลด์' : 'เพิ่มฟิลด์ใน ' + sel.name, [
+    { label: 'ชื่อฟิลด์ (ตามมาตรฐาน)', value: f && f.name, required: true },
+    { label: 'ชื่อแสดงผลภาษาไทย', value: f && f.label },
+    { label: 'ชนิดข้อมูล', type: 'select', value: (f && f.type) || 'text', options: Object.entries(TYPE_TH) },
+    { label: 'ตัวเลือก (เฉพาะชนิดตัวเลือก คั่นด้วย ,)', value: f && f.options ? f.options.join(', ') : '' },
+    { label: 'หน่วย', value: f && f.unit, placeholder: 'เช่น kV, MVA, °C' },
+    { label: 'จำเป็นต้องกรอก', type: 'checkbox', value: f ? f.required : false, hint: 'ใช่' },
+    { label: 'สถานะ', type: 'select', value: (f && f.status) || 'add', options: Object.entries(STATUS_TH) },
+    { label: 'ฟิลด์ใน Maximo', value: f && f.maximo, placeholder: 'เช่น ASSET.SERIALNUM หรือ ไม่มี' },
+    { label: 'หมายเหตุ', value: f && f.note, type: 'textarea' }]);
+  if (!v) return;
+  const node = realNode(sel.id), nf = Object.assign(f ? node.fields.find(x => x.id === f.id) : { id: uid('f') },
+    { name: v[0], label: v[1], type: v[2], options: v[2] === 'select' ? v[3].split(',').map(s => s.trim()).filter(Boolean) : undefined, unit: v[4], required: v[5], status: v[6], maximo: v[7], note: v[8] });
+  if (!nf.options) delete nf.options;
+  if (!f) node.fields = (node.fields || []).concat(nf);
+  schema.updatedAt = new Date().toISOString(); schema.updatedBy = me.email;
+  await store.saveSchema(schema); log(f ? 'แก้ไขฟิลด์' : 'เพิ่มฟิลด์', node.name + ' › ' + nf.name); indexSchema(); toast('บันทึกโครงสร้างแล้ว'); renderSchema();
+}
+async function addType() {
+  const v = await ask('เพิ่มชนิดอุปกรณ์', [
+    { label: 'อยู่ภายใต้', type: 'select', value: '', options: [['', '— เป็นอุปกรณ์หลัก (กลุ่มใหม่) —']].concat(schema.tree.map(g => [g.id, g.name])) },
+    { label: 'ชื่อ (อังกฤษ)', required: true }, { label: 'ชื่อภาษาไทย' }]);
+  if (!v) return;
+  const n = { id: uid('n'), name: v[1], nameTh: v[2], sheet: v[1], desc: '', fields: [], children: [] };
+  if (v[0]) { const g = realNode(v[0]); delete n.children; g.children = (g.children || []).concat(n); } else { n.color = '#6b7280'; schema.tree.push(n); }
+  await store.saveSchema(schema); log('เพิ่มชนิดอุปกรณ์', n.name); indexSchema(); cur.typeId = n.id; renderSchema();
+}
+
+// ================= users (admin) =================
+async function renderUsers() {
+  const users = (await store.listUsers()).sort((a, b) => a.email.localeCompare(b.email));
+  $('main').innerHTML = `<h1>ผู้ใช้ <span>${users.length}</span></h1>
+    <p class="lede">เข้าระบบได้เฉพาะอีเมลที่อยู่ในรายการนี้ (และผู้ดูแลหลักใน config.js) · ผู้ดูแล: แก้ทุกอย่างรวมโครงสร้างและผู้ใช้ · ผู้แก้ไข: เพิ่ม/แก้สถานีและอุปกรณ์ · ผู้ดู: อ่านอย่างเดียว</p>
+    <div class="row" style="margin-bottom:12px"><button class="primary" id="addUserBtn">+ เพิ่มผู้ใช้</button></div>
+    <div class="card" style="padding:6px 12px"><table><thead><tr><th>อีเมล</th><th>ชื่อ</th><th>สิทธิ์</th><th></th></tr></thead><tbody>
+    ${users.map(u => `<tr><td class="mono">${esc(u.email)}</td><td>${esc(u.name || '')}</td><td>${ROLE_TH[u.role] || esc(u.role)}</td><td><button class="link" data-eu="${esc(u.email)}">แก้ไข</button><button class="link danger" data-du="${esc(u.email)}">ลบ</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">ยังไม่มีผู้ใช้</td></tr>'}
+    </tbody></table></div>`;
+  const edit = async u => {
+    const v = await ask(u ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้', [{ label: 'อีเมล Google', value: u && u.email, required: true, type: 'email' }, { label: 'ชื่อ', value: u && u.name },
+      { label: 'สิทธิ์', type: 'select', value: (u && u.role) || 'viewer', options: Object.entries(ROLE_TH) }]);
+    if (!v) return;
+    await store.saveUser(v[0].toLowerCase(), { name: v[1], role: v[2], updatedBy: me.email, updatedAt: new Date().toISOString() });
+    log('ตั้งสิทธิ์ผู้ใช้', v[0] + ' = ' + v[2]); renderUsers();
+  };
+  $('addUserBtn').onclick = () => edit(null);
+  $('main').querySelectorAll('[data-eu]').forEach(b => b.onclick = () => edit(users.find(u => u.email === b.dataset.eu)));
+  $('main').querySelectorAll('[data-du]').forEach(b => b.onclick = async () => { if (await confirmBox('ลบสิทธิ์ ' + b.dataset.du + '?', 'ลบ')) { await store.deleteUser(b.dataset.du); log('ลบผู้ใช้', b.dataset.du); renderUsers(); } });
+}
+
+// ================= Excel export: one sheet per equipment type =================
+function exportStation() {
+  if (typeof XLSX === 'undefined') { toast('ไม่พบไลบรารี Excel'); return; }
+  const st = cur.station, wb = XLSX.utils.book_new(), used = new Set();
+  const info = [['ชื่อสถานี', st.name], ['รหัส', st.code || ''], ['หน่วยงาน / เขต', st.district || ''], ['ระดับแรงดัน', st.voltage || ''], ['ที่ตั้ง', st.address || ''], ['ละติจูด', st.lat || ''], ['ลองจิจูด', st.lon || ''], ['ส่งออกเมื่อ', new Date().toLocaleString('th-TH')]];
+  XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(info), 'สถานี');
+  Object.values(nodes).forEach(n => {
+    const list = cur.eq.filter(e => e.typeId === n.id); if (!list.length) return;
+    const fs = liveFields(n), aoa = [['ชื่อเรียก', 'อยู่ภายใต้'].concat(fs.map(f => f.name + (f.unit ? ' (' + f.unit + ')' : '')))];
+    list.forEach(e => { const p = e.parentId && cur.eq.find(x => x.id === e.parentId); aoa.push([eqLabel(e), p ? eqLabel(p) : ''].concat(fs.map(f => (e.values || {})[f.id] ?? ''))); });
+    let name = (n.sheet || n.name).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31); while (used.has(name)) name = name.slice(0, 28) + '_' + used.size; used.add(name);
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(aoa), name);
+  });
+  XLSX.writeFile(wb, 'ข้อมูลสถานี-' + (st.code || st.name) + '-' + new Date().toISOString().slice(0, 10) + '.xlsx');
+}
+
+// ================= navigation + start =================
+$('navSchema').onclick = () => { cur.view = 'schema'; render(); };
+$('navUsers').onclick = () => { cur.view = 'users'; render(); };
+async function startApp() {
+  $('login').style.display = 'none'; $('app').style.display = 'block';
+  $('whoami').textContent = (me.name || me.email) + ' · ' + (ROLE_TH[me.role] || me.role);
+  $('navSchema').hidden = !can.admin(); $('navUsers').hidden = !can.admin(); $('addStationBtn').hidden = !can.edit();
+  schema = await store.getSchema();
+  if (!schema) {
+    if (!can.admin()) { $('main').innerHTML = '<div class="empty">ระบบยังไม่ได้ตั้งค่าโครงสร้างข้อมูล ติดต่อผู้ดูแล</div>'; return; }
+    schema = await (await fetch('schema-seed.json')).json();
+    schema.createdAt = new Date().toISOString(); schema.createdBy = me.email;
+    await store.saveSchema(schema); log('ตั้งค่าโครงสร้างเริ่มต้น', 'มาตรฐานข้อมูลทรัพย์สินสถานีไฟฟ้า'); toast('ตั้งค่าโครงสร้างข้อมูลมาตรฐานแล้ว');
+  }
+  indexSchema(); await loadStations(); render();
+}
+(async () => {
+  if (DEMO) {
+    store = demoStore();
+    $('modeBadge').innerHTML = '<span class="badge demo" title="ยังไม่ได้ใส่ค่า Firebase ใน config.js ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น">โหมดทดลอง</span>';
+    $('logoutBtn').hidden = true;
+    me = { email: 'demo@local', name: 'ผู้ทดลอง', role: 'admin' }; return startApp();
+  }
+  $('login').style.display = 'grid';
+  try { store = await firestoreStore(); } catch (e) { $('loginMsg').textContent = 'โหลด Firebase ไม่ได้: ' + e.message; return; }
+  const { auth, A } = store;
+  $('loginBtn').onclick = () => A.signInWithPopup(auth, new A.GoogleAuthProvider()).catch(e => $('loginMsg').textContent = 'เข้าสู่ระบบไม่สำเร็จ: ' + e.message);
+  $('logoutBtn').onclick = () => A.signOut(auth).then(() => location.reload());
+  A.onAuthStateChanged(auth, async u => {
+    if (!u) { $('app').style.display = 'none'; $('login').style.display = 'grid'; return; }
+    const email = (u.email || '').toLowerCase();
+    let rec = null; try { rec = await store.getUser(email); } catch (e) { /* not allowed to read */ }
+    const role = OWNERS.includes(email) ? 'admin' : rec && rec.role;
+    if (!role) { $('loginMsg').innerHTML = 'บัญชี <b>' + esc(email) + '</b> ยังไม่ได้รับสิทธิ์ ติดต่อผู้ดูแลระบบ'; await A.signOut(auth); return; }
+    me = { email, name: (rec && rec.name) || u.displayName || '', role };
+    startApp().catch(e => { $('main').innerHTML = '<div class="empty">โหลดข้อมูลไม่ได้: ' + esc(e.message) + '</div>'; });
+  });
+})();
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && $('modalBg').style.display === 'flex') $('mCancel').click(); });
+</script>
+</body>
+</html>
