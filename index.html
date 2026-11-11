@@ -101,7 +101,7 @@
   </div>
   <div class="layout">
     <aside>
-      <div class="row" style="justify-content:space-between"><h2>สถานีไฟฟ้า</h2><button id="addStationBtn" hidden>+ เพิ่มสถานี</button></div>
+      <div class="row" style="justify-content:space-between"><h2><button class="link" id="overviewBtn" style="font-size:16px;color:var(--t1);padding:0">สถานีไฟฟ้า</button></h2><button id="addStationBtn" hidden>+ เพิ่มสถานี</button></div>
       <input type="search" id="stSearch" placeholder="ค้นหาชื่อหรือรหัสสถานี" aria-label="ค้นหาสถานี">
       <div class="list" id="stList"></div>
     </aside>
@@ -139,6 +139,7 @@ function demoStore() {
     async saveStation(st) { const d = load(); d.stations[st.id] = st; save(d); },
     async deleteStation(id) { const d = load(); delete d.stations[id]; delete d.eq[id]; save(d); },
     async listEquipment(sid) { return Object.values((load().eq[sid]) || {}); },
+    async listAllEquipment() { const d = load(); return Object.entries(d.eq).flatMap(([sid, m]) => Object.values(m).map(e => ({ ...e, stationId: sid }))); },
     async saveEquipment(sid, e) { const d = load(); (d.eq[sid] = d.eq[sid] || {})[e.id] = e; save(d); },
     async deleteEquipment(sid, id) { const d = load(); if (d.eq[sid]) delete d.eq[sid][id]; save(d); },
     async listUsers() { return Object.entries(load().users).map(([email, u]) => ({ email, ...u })); },
@@ -165,6 +166,7 @@ async function firestoreStore() {
       await F.deleteDoc(F.doc(db, 'stations', id));
     },
     async listEquipment(sid) { return all(F.collection(db, 'stations', sid, 'equipment')); },
+    async listAllEquipment() { return (await F.getDocs(F.collectionGroup(db, 'equipment'))).docs.map(d => ({ id: d.id, stationId: d.ref.parent.parent.id, ...d.data() })); },
     async saveEquipment(sid, e) { const { id, ...rest } = e; await F.setDoc(F.doc(db, 'stations', sid, 'equipment', id), rest); },
     async deleteEquipment(sid, id) { await F.deleteDoc(F.doc(db, 'stations', sid, 'equipment', id)); },
     async listUsers() { return (await all(F.collection(db, 'users'))).map(u => ({ email: u.id, ...u })); },
@@ -202,6 +204,7 @@ function ask(title, fields, okText) {
       f.type === 'select' ? `<select id="mf${i}">${f.options.map(o => `<option value="${esc(o[0])}"${o[0] === f.value ? ' selected' : ''}>${esc(o[1])}</option>`).join('')}</select>`
       : f.type === 'textarea' ? `<textarea id="mf${i}" rows="3">${esc(f.value || '')}</textarea>`
       : f.type === 'checkbox' ? `<label style="display:flex;gap:8px;align-items:center"><input type="checkbox" id="mf${i}" style="width:auto"${f.value ? ' checked' : ''}>${esc(f.hint || '')}</label>`
+      : f.type === 'file' ? `<input id="mfFile" type="file" accept=".xlsx,.xls,.csv"><input id="mf${i}" type="hidden" value="x">`
       : `<input id="mf${i}" type="${f.type || 'text'}" value="${esc(f.value || '')}" placeholder="${esc(f.placeholder || '')}">`}</div>`).join('')}</div>
       <div class="acts"><button id="mCancel">ยกเลิก</button><button class="primary" id="mOk">${esc(okText || 'บันทึก')}</button></div>`;
     $('modalBg').style.display = 'flex';
@@ -258,7 +261,7 @@ function render() {
   if (cur.view === 'schema') return renderSchema();
   if (cur.view === 'users') return renderUsers();
   const st = cur.station;
-  if (!st) { $('main').innerHTML = `<div class="empty">${stations.length ? 'เลือกสถานีจากรายการด้านซ้าย' : (can.edit() ? 'เริ่มต้นโดยกด "+ เพิ่มสถานี"' : 'ยังไม่มีสถานีในระบบ')}</div>`; return; }
+  if (!st) return renderOverview();
   if (cur.view === 'eq') return renderEquipment();
   const tops = cur.eq.filter(e => !e.parentId);
   $('main').innerHTML = `
@@ -266,7 +269,9 @@ function render() {
     <p class="lede">${esc([st.district, st.voltage].filter(Boolean).join(' · '))}${st.updatedAt ? ' · แก้ไขล่าสุด ' + new Date(st.updatedAt).toLocaleString('th-TH') + ' โดย ' + esc(st.updatedBy || '') : ''}</p>
     <div class="row" style="margin-bottom:14px">
       ${can.edit() ? '<button id="editStBtn">แก้ไขข้อมูลสถานี</button>' : ''}
+      ${can.edit() ? '<button id="importBtn">นำเข้าจาก Excel</button>' : ''}
       <button id="xlsxBtn">ส่งออก Excel</button>
+      <button id="tplBtn">ดาวน์โหลดแบบฟอร์มว่าง</button>
       ${can.admin() ? '<button class="danger" id="delStBtn">ลบสถานี</button>' : ''}
     </div>
     <dl class="card info">
@@ -284,7 +289,7 @@ function render() {
       })();
     }).join('')}`;
   const on = (i, f) => { const b = $(i); if (b) b.onclick = f; };
-  on('editStBtn', () => editStation(st)); on('xlsxBtn', exportStation);
+  on('editStBtn', () => editStation(st)); on('xlsxBtn', exportStation); on('importBtn', importExcel); on('tplBtn', downloadTemplate);
   on('delStBtn', async () => { if (await confirmBox('ลบสถานี "' + st.name + '" และอุปกรณ์ทั้งหมด?', 'ลบ')) { await store.deleteStation(st.id); log('ลบสถานี', st.name); cur.station = null; await loadStations(); render(); } });
   $('main').querySelectorAll('[data-add]').forEach(b => b.onclick = () => addEquipment(b.dataset.add, null));
   $('main').querySelectorAll('[data-eq]').forEach(b => b.onclick = () => { cur.view = 'eq'; cur.eqId = b.dataset.eq; render(); });
@@ -446,8 +451,94 @@ function exportStation() {
   XLSX.writeFile(wb, 'ข้อมูลสถานี-' + (st.code || st.name) + '-' + new Date().toISOString().slice(0, 10) + '.xlsx');
 }
 
+
+// ================= overview of all stations =================
+async function renderOverview() {
+  if (!stations.length) { $('main').innerHTML = `<div class="empty">${can.edit() ? 'เริ่มต้นโดยกด "+ เพิ่มสถานี"' : 'ยังไม่มีสถานีในระบบ'}</div>`; return; }
+  $('main').innerHTML = '<div class="empty">กำลังสรุปข้อมูลทุกสถานี…</div>';
+  let all = [];
+  try { all = await store.listAllEquipment(); } catch (e) { $('main').innerHTML = '<div class="empty">สรุปไม่ได้: ' + esc(e.message) + '</div>'; return; }
+  if (cur.station || cur.view !== 'station') return;   // user moved on while loading
+  const cats = [...new Set(schema.tree.map(catOf))];
+  const by = {}; stations.forEach(s => by[s.id] = { n: 0, cat: {}, pct: [] });
+  all.forEach(e => { const b = by[e.stationId]; if (!b || !nodes[e.typeId]) return; b.n++; const c = catOf(nodes[e.typeId].group); b.cat[c] = (b.cat[c] || 0) + 1; const p = completeness(e); if (p !== null) b.pct.push(p); });
+  const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length) : null;
+  const allPct = avg(Object.values(by).flatMap(b => b.pct));
+  const total = all.filter(e => nodes[e.typeId]).length;
+  const byType = {}; all.forEach(e => { if (nodes[e.typeId]) byType[e.typeId] = (byType[e.typeId] || 0) + 1; });
+  const topTypes = Object.entries(byType).sort((a, b) => b[1] - a[1]).slice(0, 8);
+  $('main').innerHTML = `
+    <h1>ภาพรวม <span>${stations.length} สถานี</span></h1>
+    <p class="lede">อุปกรณ์ทั้งหมดที่บันทึกในระบบ เลือกสถานีจากรายการด้านซ้ายเพื่อดูหรือแก้ไข</p>
+    <div class="info card" style="grid-template-columns:repeat(auto-fill,minmax(180px,1fr))">
+      <div><dt>สถานี</dt><dd style="font-size:28px">${stations.length.toLocaleString()}</dd></div>
+      <div><dt>อุปกรณ์ทั้งหมด</dt><dd style="font-size:28px">${total.toLocaleString()}</dd></div>
+      ${cats.map(c => `<div><dt>${esc(c)}</dt><dd style="font-size:28px">${Object.values(by).reduce((a, b) => a + (b.cat[c] || 0), 0).toLocaleString()}</dd></div>`).join('')}
+      <div><dt>กรอกฟิลด์จำเป็นเฉลี่ย</dt><dd style="font-size:28px">${allPct === null ? '-' : allPct + '%'}</dd></div>
+    </div>
+    <div style="display:grid;grid-template-columns:minmax(0,2fr) minmax(260px,1fr);gap:16px">
+      <div class="card" style="padding:6px 14px;overflow:auto"><table><thead><tr><th>สถานี</th><th>หน่วยงาน</th>${cats.map(c => `<th style="text-align:right">${esc(c)}</th>`).join('')}<th style="text-align:right">รวม</th><th>ฟิลด์จำเป็น</th></tr></thead><tbody>
+        ${stations.map(s => { const b = by[s.id], p = avg(b.pct); return `<tr style="cursor:pointer" data-go="${esc(s.id)}"><td><b style="font-weight:500">${esc(s.name)}</b> <span class="muted">${esc(s.code || '')}</span></td><td>${esc(s.district || '')}</td>${cats.map(c => `<td style="text-align:right" class="mono">${b.cat[c] || 0}</td>`).join('')}<td style="text-align:right" class="mono">${b.n}</td><td style="min-width:140px">${p === null ? '<span class="muted">-</span>' : `<div class="bar${p < 80 ? ' low' : ''}" style="margin:6px 0 2px"><i style="width:${p}%"></i></div><span class="muted" style="font-size:12px">${p}%</span>`}</td></tr>`; }).join('')}
+      </tbody></table></div>
+      <div class="card" style="padding:16px 18px"><h2 style="margin-bottom:10px">ชนิดอุปกรณ์ที่บันทึกมากสุด</h2>
+        ${topTypes.length ? topTypes.map(([id, n]) => `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--hair)"><span>${esc(nodes[id].nameTh || nodes[id].name)}</span><span class="mono">${n}</span></div>`).join('') : '<div class="muted">ยังไม่มีอุปกรณ์</div>'}</div>
+    </div>`;
+  $('main').querySelectorAll('[data-go]').forEach(r => r.onclick = () => openStation(r.dataset.go));
+}
+
+// ================= Excel import / blank template =================
+const norm = x => String(x ?? '').toLowerCase().replace(/[\s._\-()/]+/g, '');
+function typeOptions() { const o = []; schema.tree.forEach(g => { o.push([g.id, (g.nameTh || g.name) + ' — ' + g.name]); (g.children || []).forEach(c => o.push([c.id, '   › ' + (c.nameTh || c.name) + ' — ' + c.name])); }); return o; }
+async function downloadTemplate() {
+  if (typeof XLSX === 'undefined') { toast('ไม่พบไลบรารี Excel'); return; }
+  const v = await ask('ดาวน์โหลดแบบฟอร์มว่าง', [{ label: 'ชนิดอุปกรณ์', type: 'select', value: schema.tree[0].id, options: typeOptions() }], 'ดาวน์โหลด');
+  if (!v) return;
+  const n = nodes[v[0]], fs = liveFields(n), wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([['ชื่อเรียก'].concat(fs.map(f => f.name))]);
+  ws['!cols'] = [{ wch: 16 }].concat(fs.map(f => ({ wch: Math.max(12, f.name.length + 2) })));
+  XLSX.utils.book_append_sheet(wb, ws, (n.sheet || n.name).replace(/[\\/?*[\]:]/g, ' ').slice(0, 31));
+  XLSX.writeFile(wb, 'แบบฟอร์ม-' + n.name.slice(0, 40) + '.xlsx');
+}
+async function importExcel() {
+  if (typeof XLSX === 'undefined') { toast('ไม่พบไลบรารี Excel'); return; }
+  const v = await ask('นำเข้าอุปกรณ์จาก Excel', [
+    { label: 'ชนิดอุปกรณ์ในไฟล์', type: 'select', value: schema.tree[0].id, options: typeOptions() },
+    { label: 'ไฟล์ Excel (แถวแรกเป็นชื่อฟิลด์ 1 แถวต่อ 1 อุปกรณ์)', type: 'file' }], 'อ่านไฟล์');
+  if (!v) return;
+  const n = nodes[v[0]], file = $('mfFile') && $('mfFile').files[0];
+  if (!file) { toast('ยังไม่ได้เลือกไฟล์'); return; }
+  const wb = XLSX.read(await file.arrayBuffer(), { cellDates: true });
+  const rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: true, defval: '' }).filter(r => r.some(c => String(c).trim() !== ''));
+  if (rows.length < 2) { toast('ไม่พบข้อมูลในไฟล์'); return; }
+  const head = rows[0].map(h => String(h).trim()), fs = liveFields(n), map = {}, unknown = [];
+  head.forEach((h, i) => { const f = fs.find(f => norm(f.name) === norm(h) || (f.label && norm(f.label) === norm(h))); if (f) map[i] = f; else if (norm(h) !== norm('ชื่อเรียก') && h) unknown.push(h); });
+  const tagCol = head.findIndex(h => norm(h) === norm('ชื่อเรียก'));
+  const pick = names => { for (const nm of names) { const i = head.findIndex(h => norm(h) === norm(nm)); if (i >= 0) return i; } return -1; };
+  const nameCol = tagCol >= 0 ? tagCol : pick(['Name', 'Mea No.', 'Bay', 'Function Name', 'Feeder No.', 'Position']);
+  // components need a parent of the right group in this station
+  let parentId = null;
+  if (n.parent) {
+    const parents = cur.eq.filter(e => !e.parentId && e.typeId === n.parent.id);
+    if (!parents.length) { toast('เพิ่ม "' + (n.parent.nameTh || n.parent.name) + '" ในสถานีนี้ก่อน แล้วค่อยนำเข้าส่วนประกอบ'); return; }
+    const p = await ask('นำเข้าเป็นส่วนประกอบของ', [{ label: n.parent.nameTh || n.parent.name, type: 'select', value: parents[0].id, options: parents.map(e => [e.id, eqLabel(e)]) }], 'ต่อไป');
+    if (!p) return; parentId = p[0];
+  }
+  const cell = (x, f) => { if (x === '' || x === null || x === undefined) return undefined;
+    if (x instanceof Date) return f.type === 'date' ? x.toISOString().slice(0, 10) : x.toISOString().slice(0, 10);
+    if (f.type === 'number') { const num = Number(String(x).replace(/,/g, '')); return isNaN(num) ? String(x) : num; }
+    return String(x).trim(); };
+  const items = rows.slice(1).map((r, k) => { const values = {}; Object.entries(map).forEach(([i, f]) => { const val = cell(r[i], f); if (val !== undefined) values[f.id] = val; });
+    return { tag: String(nameCol >= 0 ? r[nameCol] : '').trim() || (n.name + ' ' + (k + 1)), values }; }).filter(x => Object.keys(x.values).length);
+  const ok = await confirmBox(`พบ ${items.length} รายการ · จับคู่ได้ ${Object.keys(map).length} จาก ${head.length} คอลัมน์${unknown.length ? ' · ไม่รู้จัก: ' + unknown.slice(0, 6).join(', ') + (unknown.length > 6 ? ' …' : '') : ''} · นำเข้าเป็น "${n.nameTh || n.name}" ในสถานี ${cur.station.name}?`, 'นำเข้า');
+  if (!ok) return;
+  const now = new Date().toISOString();
+  for (const it of items) { const e = { id: uid('eq'), typeId: n.id, parentId, tag: it.tag, values: it.values, createdAt: now, createdBy: me.email, updatedAt: now, updatedBy: me.email }; await store.saveEquipment(cur.station.id, e); cur.eq.push(e); }
+  log('นำเข้า Excel', cur.station.name + ' › ' + n.name + ' ' + items.length + ' รายการ'); toast('นำเข้า ' + items.length + ' รายการแล้ว'); render();
+}
+
 // ================= navigation + start =================
 $('navSchema').onclick = () => { cur.view = 'schema'; render(); };
+$('overviewBtn').onclick = () => { cur.station = null; cur.view = 'station'; renderStations(); render(); };
 $('navUsers').onclick = () => { cur.view = 'users'; render(); };
 async function startApp() {
   $('login').style.display = 'none'; $('app').style.display = 'block';
@@ -472,7 +563,8 @@ async function startApp() {
   $('login').style.display = 'grid';
   try { store = await firestoreStore(); } catch (e) { $('loginMsg').textContent = 'โหลด Firebase ไม่ได้: ' + e.message; return; }
   const { auth, A } = store;
-  $('loginBtn').onclick = () => A.signInWithPopup(auth, new A.GoogleAuthProvider()).catch(e => $('loginMsg').textContent = 'เข้าสู่ระบบไม่สำเร็จ: ' + e.message);
+  const provider = new A.GoogleAuthProvider(); provider.setCustomParameters({ prompt: 'select_account' });   // always let the user pick the account
+  $('loginBtn').onclick = () => A.signInWithPopup(auth, provider).catch(e => $('loginMsg').textContent = 'เข้าสู่ระบบไม่สำเร็จ: ' + e.message);
   $('logoutBtn').onclick = () => A.signOut(auth).then(() => location.reload());
   A.onAuthStateChanged(auth, async u => {
     if (!u) { $('app').style.display = 'none'; $('login').style.display = 'grid'; return; }
