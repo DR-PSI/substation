@@ -67,6 +67,9 @@
   th{text-align:left;font-weight:400;color:var(--t2);padding:8px 10px;border-bottom:1px solid var(--hair)}
   td{padding:8px 10px;border-bottom:1px solid var(--hair);vertical-align:top}
   .tree{max-height:70vh;overflow:auto}
+  .bulkbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:10px;padding:8px 10px;border-radius:8px;background:var(--raised);font-size:13px}
+  .bulkbar select{width:auto}
+  .bulkbar #bulkCount{min-width:90px;color:var(--t2)}
   .tree button{display:block;width:100%;text-align:left;border:none;background:none;border-radius:6px;padding:5px 8px}
   .tree button.on{background:#eef3fc} .tree .child{padding-left:22px;color:var(--t2)}
   .modal-bg{position:fixed;inset:0;background:rgba(0,0,0,.35);display:none;align-items:center;justify-content:center;padding:16px;z-index:20}
@@ -209,7 +212,7 @@ function serverStore() {
     async addLog(x) { try { await call('POST', 'log', x); } catch (e) { console.warn('log', e); } }
   };
 }
-const can = { edit: () => me.role === 'admin' || me.role === 'editor', admin: () => me.role === 'admin' };
+const can = { edit: () => !me.readonly && (me.role === 'admin' || me.role === 'editor'), admin: () => me.role === 'admin' };
 const log = (action, target) => store.addLog({ t: new Date().toISOString(), user: me.email, action, target });
 
 // ================= state =================
@@ -395,12 +398,32 @@ function renderSchema() {
         <div style="padding:8px"><button id="addTypeBtn">+ เพิ่มชนิดอุปกรณ์</button></div></div>
       <div class="card" style="padding:16px 18px;min-width:0">
         <div class="row" style="justify-content:space-between;margin-bottom:10px"><h2>${esc(typeName(sel))} <span class="muted">· ${(sel.fields || []).length} ฟิลด์</span></h2><button class="primary" id="addFieldBtn">+ เพิ่มฟิลด์</button></div>
-        <div style="overflow:auto"><table><thead><tr><th>ฟิลด์</th><th>ชนิด</th><th>หน่วย</th><th>จำเป็น</th><th>สถานะ</th><th>Maximo</th><th></th></tr></thead><tbody>
-        ${(sel.fields || []).map(f => `<tr${f.status === 'remove' ? ' style="opacity:.5"' : ''}><td>${esc(f.name)}${f.label && f.label !== f.name ? `<div class="muted" style="font-size:12px">${esc(f.label)}</div>` : ''}</td><td>${TYPE_TH[f.type] || esc(f.type)}</td><td>${esc(f.unit || '')}</td><td>${f.required ? 'ใช่' : ''}</td><td>${STATUS_TH[f.status] || ''}</td><td class="mono" style="font-size:12px">${esc(f.maximo || '')}</td><td><button class="link" data-ef="${esc(f.id)}">แก้ไข</button></td></tr>`).join('')}
+        <div class="bulkbar" id="bulkBar"><span id="bulkCount">เลือก 0 ฟิลด์</span>
+          <select id="bulkStatus">${Object.entries(STATUS_TH).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select>
+          <button id="bulkApply" disabled>เปลี่ยนสถานะ</button>
+          <select id="bulkReq"><option value="">จำเป็นต้องกรอก…</option><option value="1">ตั้งเป็น จำเป็น</option><option value="0">ตั้งเป็น ไม่จำเป็น</option></select>
+          <button id="bulkReqApply" disabled>ใช้</button></div>
+        <div style="overflow:auto"><table><thead><tr><th style="width:32px"><input type="checkbox" id="chkAll" title="เลือกทั้งหมด" style="width:auto"></th><th>ฟิลด์</th><th>ชนิด</th><th>หน่วย</th><th>จำเป็น</th><th>สถานะ</th><th>Maximo</th><th></th></tr></thead><tbody>
+        ${(sel.fields || []).map(f => `<tr${f.status === 'remove' ? ' style="opacity:.5"' : ''}><td><input type="checkbox" class="chkF" value="${esc(f.id)}" style="width:auto"></td><td>${esc(f.name)}${f.label && f.label !== f.name ? `<div class="muted" style="font-size:12px">${esc(f.label)}</div>` : ''}</td><td>${TYPE_TH[f.type] || esc(f.type)}</td><td>${esc(f.unit || '')}</td><td>${f.required ? 'ใช่' : ''}</td><td>${STATUS_TH[f.status] || ''}</td><td class="mono" style="font-size:12px">${esc(f.maximo || '')}</td><td><button class="link" data-ef="${esc(f.id)}">แก้ไข</button></td></tr>`).join('')}
         </tbody></table></div></div></div>`;
   $('main').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { cur.typeId = b.dataset.t; renderSchema(); });
   $('main').querySelectorAll('[data-ef]').forEach(b => b.onclick = () => editField(sel, sel.fields.find(f => f.id === b.dataset.ef)));
   $('addFieldBtn').onclick = () => editField(sel, null);
+  // bulk edit: tick several fields, then change status / required in one save
+  const boxes = () => [...$('main').querySelectorAll('.chkF')];
+  const picked = () => boxes().filter(b => b.checked).map(b => b.value);
+  const sync = () => { const n = picked().length; $('bulkCount').textContent = 'เลือก ' + n + ' ฟิลด์'; $('bulkApply').disabled = !n; $('bulkReqApply').disabled = !n || !$('bulkReq').value; $('chkAll').checked = n && n === boxes().length; };
+  boxes().forEach(b => b.onchange = sync); $('bulkReq').onchange = sync;
+  $('chkAll').onchange = () => { boxes().forEach(b => b.checked = $('chkAll').checked); sync(); };
+  const bulk = async (label, change) => {
+    const ids = picked(), node = realNode(sel.id);
+    node.fields.forEach(f => { if (ids.includes(f.id)) change(f); });
+    schema.updatedAt = new Date().toISOString(); schema.updatedBy = me.email;
+    await store.saveSchema(schema); log('แก้ไขฟิลด์หลายรายการ', node.name + ' › ' + ids.length + ' ฟิลด์ › ' + label);
+    indexSchema(); toast('แก้ไข ' + ids.length + ' ฟิลด์แล้ว'); renderSchema();
+  };
+  $('bulkApply').onclick = () => { const st = $('bulkStatus').value; bulk('สถานะ ' + STATUS_TH[st], f => f.status = st); };
+  $('bulkReqApply').onclick = () => { const r = $('bulkReq').value === '1'; bulk(r ? 'จำเป็น' : 'ไม่จำเป็น', f => f.required = r); };
   $('addTypeBtn').onclick = addType;
   offerNewGroups();
 }
@@ -469,6 +492,21 @@ async function renderUsers() {
   };
   $('addUserBtn').onclick = () => edit(null);
   $('backupBtn').onclick = backupAll; $('restoreBtn').onclick = restoreAll;
+  if (SERVER && me.syncReady) {
+    if (me.readonly) $('restoreBtn').hidden = true;
+    const st = await store.call('GET', 'sync').catch(() => ({}));
+    const box = document.createElement('div'); box.className = 'card'; box.style.cssText = 'padding:14px 18px;margin-top:14px';
+    box.innerHTML = `<h2 style="margin-bottom:6px">ดึงข้อมูลจากเว็บ am.maintenanceweb.online</h2>
+      <div class="muted" style="font-size:13px">${me.readonly ? 'แทนที่ข้อมูลทั้งหมดอัตโนมัติทุกวันเวลา ' + String(st.hour ?? 0).padStart(2, '0') + ':00' : 'ทำเมื่อกดปุ่มเท่านั้น · <b>เพิ่มและอัปเดต</b>สถานี/อุปกรณ์ที่มาจากเว็บ ข้อมูลที่กรอกบน server นี้ไม่ถูกลบ'} · ล่าสุดสำเร็จ ${st.lastOk ? new Date(st.lastOk).toLocaleString('th-TH') : '-'}${st.stations !== undefined ? ' (' + st.stations + ' สถานี ' + st.equipment + ' อุปกรณ์)' : ''}
+      ${st.ok === false ? '<br><span style="color:var(--neg)">ครั้งล่าสุดไม่สำเร็จ: ' + esc(st.error || '') + '</span>' : ''}</div>
+      <button class="primary" id="syncNowBtn" style="margin-top:10px">ดึงข้อมูลจากเว็บตอนนี้</button>`;
+    $('main').appendChild(box);
+    $('syncNowBtn').onclick = async () => {
+      $('syncNowBtn').disabled = true; $('syncNowBtn').textContent = 'กำลังคัดลอก…';
+      try { const r = await store.call('POST', 'sync', {}); toast('คัดลอกแล้ว ' + r.stations + ' สถานี ' + r.equipment + ' อุปกรณ์'); schema = await store.getSchema(); indexSchema(); await loadStations(); me = await store.call('GET', 'me'); renderUsers(); }
+      catch (e) { toast('คัดลอกไม่สำเร็จ: ' + e.message); renderUsers(); }
+    };
+  }
   $('main').querySelectorAll('[data-eu]').forEach(b => b.onclick = () => edit(users.find(u => u.email === b.dataset.eu)));
   $('main').querySelectorAll('[data-du]').forEach(b => b.onclick = async () => { if (await confirmBox('ลบสิทธิ์ ' + b.dataset.du + '?', 'ลบ')) { await store.deleteUser(b.dataset.du); log('ลบผู้ใช้', b.dataset.du); renderUsers(); } });
 }
@@ -616,7 +654,11 @@ $('whoami').onclick = changePassword;
 async function startApp() {
   $('login').style.display = 'none'; $('app').style.display = 'block';
   $('whoami').textContent = (me.name || me.email) + ' · ' + (ROLE_TH[me.role] || me.role);
-  $('navSchema').hidden = !can.admin(); $('navUsers').hidden = !can.admin(); $('addStationBtn').hidden = !can.edit();
+  $('navSchema').hidden = !can.admin() || !!me.readonly; $('navUsers').hidden = !can.admin(); $('addStationBtn').hidden = !can.edit();
+  if (SERVER && me.readonly) {
+    const sy = me.sync || {}, t = sy.lastOk ? new Date(sy.lastOk).toLocaleString('th-TH') : 'ยังไม่เคย';
+    $('modeBadge').innerHTML = `<span class="badge" title="ข้อมูลคัดลอกจาก am.maintenanceweb.online ทุกเที่ยงคืน แก้ไขที่เว็บเท่านั้น">สำเนาจากเว็บ · ซิงก์ล่าสุด ${esc(t)}</span>`;
+  }
   schema = await store.getSchema();
   if (!schema) {
     if (!can.admin()) { $('main').innerHTML = '<div class="empty">ระบบยังไม่ได้ตั้งค่าโครงสร้างข้อมูล ติดต่อผู้ดูแล</div>'; return; }
@@ -639,7 +681,7 @@ async function startApp() {
     $('loginBtn').textContent = 'เข้าสู่ระบบ'; $('pwForm').style.display = 'block';
     $('logoutBtn').onclick = async () => { try { await store.call('POST', 'logout', {}); } catch (e) {} location.reload(); };
     const go = async () => {
-      try { me = await store.call('POST', 'login', { email: $('lgEmail').value.trim(), password: $('lgPass').value }); $('lgPass').value = ''; startApp(); }
+      try { await store.call('POST', 'login', { email: $('lgEmail').value.trim(), password: $('lgPass').value }); $('lgPass').value = ''; me = await store.call('GET', 'me'); startApp(); }
       catch (e) { $('loginMsg').textContent = e.message; }
     };
     $('loginBtn').onclick = go; $('pwForm').onsubmit = e => { e.preventDefault(); go(); };
