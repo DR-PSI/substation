@@ -84,6 +84,10 @@
   <div class="card">
     <h1 id="loginTitle">ข้อมูลทรัพย์สินสถานีไฟฟ้า</h1>
     <p class="muted" style="margin:0 0 20px">เก็บข้อมูลอุปกรณ์ในสถานีไฟฟ้าตามมาตรฐานโครงสร้างข้อมูล เข้าใช้ได้เฉพาะผู้ที่ได้รับอนุญาต</p>
+    <form id="pwForm" style="display:none;margin-bottom:12px" autocomplete="on">
+      <label for="lgEmail">อีเมล</label><input id="lgEmail" type="email" autocomplete="username" style="margin-bottom:10px">
+      <label for="lgPass">รหัสผ่าน</label><input id="lgPass" type="password" autocomplete="current-password">
+    </form>
     <button class="primary" id="loginBtn" style="width:100%;padding:11px">เข้าสู่ระบบด้วย Google</button>
     <p id="loginMsg" class="muted" style="margin:14px 0 0;font-size:13px"></p>
   </div>
@@ -95,7 +99,7 @@
     <div class="right">
       <button class="link" id="navSchema" hidden>โครงสร้างฟิลด์</button>
       <button class="link" id="navUsers" hidden>ผู้ใช้</button>
-      <span class="muted" id="whoami"></span>
+      <button class="link" id="whoami" title="บัญชีของฉัน"></button>
       <button id="logoutBtn">ออกจากระบบ</button>
     </div>
   </div>
@@ -113,10 +117,12 @@
 <div id="toast"></div>
 
 <script src="config.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="vendor/xlsx.full.min.js"></script>
+<script>if (!window.XLSX) { const s = document.createElement('script'); s.src = 'https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js'; document.head.appendChild(s); }</script>
 <script type="module">
 const CFG = window.APP_CONFIG || {}, FB = CFG.firebase || {};
-const DEMO = !FB.apiKey;
+const SERVER = CFG.mode === 'server';
+const DEMO = !SERVER && !FB.apiKey;
 const OWNERS = (CFG.ownerEmails || []).map(e => e.toLowerCase());
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -174,6 +180,33 @@ async function firestoreStore() {
     async deleteUser(email) { await F.deleteDoc(F.doc(db, 'users', email)); },
     async getUser(email) { const s = await F.getDoc(F.doc(db, 'users', email)); return s.exists() ? s.data() : null; },
     async addLog(x) { try { await F.addDoc(F.collection(db, 'log'), x); } catch (e) { console.warn('log', e); } }
+  };
+}
+
+function serverStore() {
+  const call = async (method, url, body) => {
+    const r = await fetch('api/' + url, { method, credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'subdata' }, body: body === undefined ? undefined : JSON.stringify(body) });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) { const e = new Error(j.error || ('HTTP ' + r.status)); e.status = r.status; throw e; }
+    return j;
+  };
+  const enc = encodeURIComponent;
+  return {
+    call,
+    async getSchema() { return (await call('GET', 'schema')).schema; },
+    async saveSchema(s) { await call('PUT', 'schema', s); },
+    async listStations() { return call('GET', 'stations'); },
+    async saveStation(st) { await call('PUT', 'stations/' + enc(st.id), st); },
+    async deleteStation(id) { await call('DELETE', 'stations/' + enc(id)); },
+    async listEquipment(sid) { return call('GET', 'stations/' + enc(sid) + '/equipment'); },
+    async listAllEquipment() { return call('GET', 'equipment'); },
+    async saveEquipment(sid, e) { await call('PUT', 'stations/' + enc(sid) + '/equipment/' + enc(e.id), e); },
+    async deleteEquipment(sid, id) { await call('DELETE', 'stations/' + enc(sid) + '/equipment/' + enc(id)); },
+    async listUsers() { return call('GET', 'users'); },
+    async saveUser(email, u) { await call('PUT', 'users/' + enc(email), u); },
+    async deleteUser(email) { await call('DELETE', 'users/' + enc(email)); },
+    async getUser() { return null; },
+    async addLog(x) { try { await call('POST', 'log', x); } catch (e) { console.warn('log', e); } }
   };
 }
 const can = { edit: () => me.role === 'admin' || me.role === 'editor', admin: () => me.role === 'admin' };
@@ -418,19 +451,24 @@ async function addType() {
 async function renderUsers() {
   const users = (await store.listUsers()).sort((a, b) => a.email.localeCompare(b.email));
   $('main').innerHTML = `<h1>ผู้ใช้ <span>${users.length}</span></h1>
-    <p class="lede">เข้าระบบได้เฉพาะอีเมลที่อยู่ในรายการนี้ (และผู้ดูแลหลักใน config.js) · ผู้ดูแล: แก้ทุกอย่างรวมโครงสร้างและผู้ใช้ · ผู้แก้ไข: เพิ่ม/แก้สถานีและอุปกรณ์ · ผู้ดู: อ่านอย่างเดียว</p>
-    <div class="row" style="margin-bottom:12px"><button class="primary" id="addUserBtn">+ เพิ่มผู้ใช้</button></div>
+    <p class="lede">เข้าระบบได้เฉพาะอีเมลที่อยู่ในรายการนี้${SERVER ? '' : ' (และผู้ดูแลหลักใน config.js)'} · ผู้ดูแล: แก้ทุกอย่างรวมโครงสร้างและผู้ใช้ · ผู้แก้ไข: เพิ่ม/แก้สถานีและอุปกรณ์ · ผู้ดู: อ่านอย่างเดียว</p>
+    <div class="row" style="margin-bottom:12px"><button class="primary" id="addUserBtn">+ เพิ่มผู้ใช้</button>
+      <span style="flex:1"></span><button id="backupBtn">สำรองข้อมูลทั้งหมด (JSON)</button><button id="restoreBtn">นำเข้าไฟล์สำรอง</button></div>
     <div class="card" style="padding:6px 12px"><table><thead><tr><th>อีเมล</th><th>ชื่อ</th><th>สิทธิ์</th><th></th></tr></thead><tbody>
     ${users.map(u => `<tr><td class="mono">${esc(u.email)}</td><td>${esc(u.name || '')}</td><td>${ROLE_TH[u.role] || esc(u.role)}</td><td><button class="link" data-eu="${esc(u.email)}">แก้ไข</button><button class="link danger" data-du="${esc(u.email)}">ลบ</button></td></tr>`).join('') || '<tr><td colspan="4" class="muted">ยังไม่มีผู้ใช้</td></tr>'}
     </tbody></table></div>`;
   const edit = async u => {
-    const v = await ask(u ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้', [{ label: 'อีเมล Google', value: u && u.email, required: true, type: 'email' }, { label: 'ชื่อ', value: u && u.name },
-      { label: 'สิทธิ์', type: 'select', value: (u && u.role) || 'viewer', options: Object.entries(ROLE_TH) }]);
+    const fields = [{ label: SERVER ? 'อีเมล (ใช้เป็นชื่อเข้าระบบ)' : 'อีเมล Google', value: u && u.email, required: true, type: 'email' }, { label: 'ชื่อ', value: u && u.name },
+      { label: 'สิทธิ์', type: 'select', value: (u && u.role) || 'viewer', options: Object.entries(ROLE_TH) }];
+    if (SERVER) fields.push({ label: u ? 'รหัสผ่านใหม่ (เว้นว่าง = ไม่เปลี่ยน)' : 'รหัสผ่าน (อย่างน้อย 8 ตัว)', type: 'password', required: !u });
+    const v = await ask(u ? 'แก้ไขผู้ใช้' : 'เพิ่มผู้ใช้', fields);
     if (!v) return;
-    await store.saveUser(v[0].toLowerCase(), { name: v[1], role: v[2], updatedBy: me.email, updatedAt: new Date().toISOString() });
+    try { await store.saveUser(v[0].toLowerCase(), Object.assign({ name: v[1], role: v[2], updatedBy: me.email, updatedAt: new Date().toISOString() }, SERVER && v[3] ? { password: v[3] } : {})); }
+    catch (e) { toast(e.message); return; }
     log('ตั้งสิทธิ์ผู้ใช้', v[0] + ' = ' + v[2]); renderUsers();
   };
   $('addUserBtn').onclick = () => edit(null);
+  $('backupBtn').onclick = backupAll; $('restoreBtn').onclick = restoreAll;
   $('main').querySelectorAll('[data-eu]').forEach(b => b.onclick = () => edit(users.find(u => u.email === b.dataset.eu)));
   $('main').querySelectorAll('[data-du]').forEach(b => b.onclick = async () => { if (await confirmBox('ลบสิทธิ์ ' + b.dataset.du + '?', 'ลบ')) { await store.deleteUser(b.dataset.du); log('ลบผู้ใช้', b.dataset.du); renderUsers(); } });
 }
@@ -536,10 +574,45 @@ async function importExcel() {
   log('นำเข้า Excel', cur.station.name + ' › ' + n.name + ' ' + items.length + ' รายการ'); toast('นำเข้า ' + items.length + ' รายการแล้ว'); render();
 }
 
+
+// ================= backup / restore (moves data between the cloud and the on-premises server) =================
+async function backupAll() {
+  toast('กำลังรวบรวมข้อมูล…');
+  const out = { app: 'subdata', made: new Date().toISOString(), by: me.email, schema, stations: await store.listStations(), equipment: await store.listAllEquipment() };
+  const blob = new Blob([JSON.stringify(out)], { type: 'application/json' }), a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = 'subdata-backup-' + new Date().toISOString().slice(0, 10) + '.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+  log('สำรองข้อมูล', out.stations.length + ' สถานี ' + out.equipment.length + ' อุปกรณ์');
+}
+async function restoreAll() {
+  const v = await ask('นำเข้าไฟล์สำรอง', [{ label: 'ไฟล์ .json ที่ได้จากปุ่ม "สำรองข้อมูลทั้งหมด"', type: 'file' },
+    { label: 'แทนที่โครงสร้างฟิลด์ด้วยของในไฟล์', type: 'checkbox', value: true, hint: 'ใช่' }], 'อ่านไฟล์');
+  if (!v) return;
+  const f = $('mfFile') && $('mfFile').files[0]; if (!f) { toast('ยังไม่ได้เลือกไฟล์'); return; }
+  let b; try { b = JSON.parse(await f.text()); } catch (e) { toast('อ่านไฟล์ไม่ได้'); return; }
+  if (b.app !== 'subdata') { toast('ไม่ใช่ไฟล์สำรองของระบบนี้'); return; }
+  if (!(await confirmBox(`นำเข้า ${b.stations.length} สถานี ${b.equipment.length} อุปกรณ์ (สำรองเมื่อ ${new Date(b.made).toLocaleString('th-TH')}) รายการที่รหัสซ้ำจะถูกแทนที่`, 'นำเข้า'))) return;
+  if (SERVER) { const r = await store.call('POST', 'backup', Object.assign(b, { replaceSchema: v[1] })); toast('นำเข้า ' + r.stations + ' สถานี ' + r.equipment + ' อุปกรณ์แล้ว'); }
+  else {
+    if (v[1] && b.schema) await store.saveSchema(b.schema);
+    for (const st of b.stations) await store.saveStation(st);
+    for (const e of b.equipment) { const { stationId, ...rest } = e; await store.saveEquipment(stationId, rest); }
+    log('นำเข้าไฟล์สำรอง', b.stations.length + ' สถานี ' + b.equipment.length + ' อุปกรณ์'); toast('นำเข้าแล้ว');
+  }
+  schema = await store.getSchema(); indexSchema(); await loadStations(); cur.station = null; cur.view = 'station'; render();
+}
+async function changePassword() {
+  if (!SERVER) { toast('บัญชีนี้ใช้รหัสผ่านของ Google'); return; }
+  const v = await ask('เปลี่ยนรหัสผ่าน', [{ label: 'รหัสผ่านเดิม', type: 'password', required: true }, { label: 'รหัสผ่านใหม่ (อย่างน้อย 8 ตัว)', type: 'password', required: true }, { label: 'ยืนยันรหัสผ่านใหม่', type: 'password', required: true }]);
+  if (!v) return;
+  if (v[1] !== v[2]) { toast('รหัสผ่านใหม่ไม่ตรงกัน'); return; }
+  try { await store.call('POST', 'password', { old: v[0], new: v[1] }); toast('เปลี่ยนรหัสผ่านแล้ว'); } catch (e) { toast(e.message); }
+}
+
 // ================= navigation + start =================
 $('navSchema').onclick = () => { cur.view = 'schema'; render(); };
 $('overviewBtn').onclick = () => { cur.station = null; cur.view = 'station'; renderStations(); render(); };
 $('navUsers').onclick = () => { cur.view = 'users'; render(); };
+$('whoami').onclick = changePassword;
 async function startApp() {
   $('login').style.display = 'none'; $('app').style.display = 'block';
   $('whoami').textContent = (me.name || me.email) + ' · ' + (ROLE_TH[me.role] || me.role);
@@ -559,6 +632,20 @@ async function startApp() {
     $('modeBadge').innerHTML = '<span class="badge demo" title="ยังไม่ได้ใส่ค่า Firebase ใน config.js ข้อมูลเก็บในเบราว์เซอร์นี้เท่านั้น">โหมดทดลอง</span>';
     $('logoutBtn').hidden = true;
     me = { email: 'demo@local', name: 'ผู้ทดลอง', role: 'admin' }; return startApp();
+  }
+  if (SERVER) {
+    store = serverStore();
+    $('modeBadge').innerHTML = '<span class="badge" title="ข้อมูลเก็บบน server ภายในองค์กร">server ภายใน</span>';
+    $('loginBtn').textContent = 'เข้าสู่ระบบ'; $('pwForm').style.display = 'block';
+    $('logoutBtn').onclick = async () => { try { await store.call('POST', 'logout', {}); } catch (e) {} location.reload(); };
+    const go = async () => {
+      try { me = await store.call('POST', 'login', { email: $('lgEmail').value.trim(), password: $('lgPass').value }); $('lgPass').value = ''; startApp(); }
+      catch (e) { $('loginMsg').textContent = e.message; }
+    };
+    $('loginBtn').onclick = go; $('pwForm').onsubmit = e => { e.preventDefault(); go(); };
+    $('lgPass').addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); go(); } });
+    try { me = await store.call('GET', 'me'); return startApp(); } catch (e) { $('login').style.display = 'grid'; setTimeout(() => $('lgEmail').focus(), 50); }
+    return;
   }
   $('login').style.display = 'grid';
   try { store = await firestoreStore(); } catch (e) { $('loginMsg').textContent = 'โหลด Firebase ไม่ได้: ' + e.message; return; }
