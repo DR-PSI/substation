@@ -388,6 +388,14 @@ function renderEquipment() {
 
 // ================= schema editor (admin) =================
 function renderSchema() {
+  // keep the type list and the page where they were (re-rendering would jump back to the top)
+  const prevTree = document.querySelector('#main .tree'), keepTree = prevTree ? prevTree.scrollTop : null, keepY = window.scrollY;
+  renderSchemaInner();
+  const t = document.querySelector('#main .tree');
+  if (t && keepTree !== null) t.scrollTop = keepTree;
+  if (keepTree !== null) window.scrollTo(0, keepY);
+}
+function renderSchemaInner() {
   const sel = nodes[cur.typeId] || nodes[schema.tree[0].id]; cur.typeId = sel.id;
   $('main').innerHTML = `
     <h1>โครงสร้างฟิลด์ <span>${Object.keys(nodes).length} ชนิดอุปกรณ์</span></h1>
@@ -396,7 +404,7 @@ function renderSchema() {
     <div style="display:grid;grid-template-columns:280px minmax(0,1fr);gap:16px">
       <div class="card tree" style="padding:10px">${schema.tree.map((g, i) => `${i === 0 || catOf(schema.tree[i - 1]) !== catOf(g) ? `<div class="cath">${esc(catOf(g))}</div>` : ''}<button data-t="${g.id}" class="${g.id === sel.id ? 'on' : ''}">${esc(g.name)}</button>${(g.children || []).map(c => `<button data-t="${c.id}" class="child${c.id === sel.id ? ' on' : ''}">${esc(c.name)}</button>`).join('')}`).join('')}
         <div style="padding:8px"><button id="addTypeBtn">+ เพิ่มชนิดอุปกรณ์</button></div></div>
-      <div class="card" style="padding:16px 18px;min-width:0">
+      <div class="card" style="padding:16px 18px;min-width:0;align-self:start">
         <div class="row" style="justify-content:space-between;margin-bottom:10px"><h2>${esc(typeName(sel))} <span class="muted">· ${(sel.fields || []).length} ฟิลด์</span></h2><button class="primary" id="addFieldBtn">+ เพิ่มฟิลด์</button></div>
         <div class="bulkbar" id="bulkBar"><span id="bulkCount">เลือก 0 ฟิลด์</span>
           <select id="bulkStatus">${Object.entries(STATUS_TH).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select>
